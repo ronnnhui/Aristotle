@@ -1,0 +1,29 @@
+{
+    "server": {
+        "host": "0.0.0.0",
+        "port": 1005,
+        "debug": false
+    },
+    "silicon_flow": {
+        "api_token": "sk-hvgftritwrjfrrqktxgfhzpqpcbeqnlfpukcseknpqsowqhz",
+        "models": {
+            "asr": "FunAudioLLM/SenseVoiceSmall",
+            "llm": "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
+            "tts": {
+                "model": "FunAudioLLM/CosyVoice2-0.5B",
+                "default_voice": "FunAudioLLM/CosyVoice2-0.5B:claire"
+            }
+        },
+        "api_base_url": "https://api.siliconflow.cn/v1"
+    },
+    "dida365": {
+        "client_id": "abCz16yBJnazGAC52B",
+        "client_secret": "#bv2)n&KL3X1oEp1UJZD)))il*4WHmx1",
+        "redirect_uri": "http://cr8z.me:8080/callback",
+        "auth_url": "https://dida365.com/oauth/authorize",
+        "token_url": "https://dida365.com/oauth/token",
+        "api_base_url": "https://api.dida365.com/open/v1",
+        "scope": "tasks:write tasks:read",
+        "db_path": "dida_local.db"
+    }
+} 

@@ -385,25 +385,66 @@ def handle_initial_command(command, session_id, total_start_time):
     
     response_content = llm_response['choices'][0]['message']['content']
     cleaned_content = response_content.strip()
-    if cleaned_content.startswith('```json'):
-        cleaned_content = cleaned_content[7:]
-    if cleaned_content.endswith('```'):
-        cleaned_content = cleaned_content[:-3]
-    response_data = json.loads(cleaned_content.strip())
     
+    try:
+        # 尝试解析JSON响应
+        if cleaned_content.startswith('```json'):
+            cleaned_content = cleaned_content[7:]
+        if cleaned_content.endswith('```'):
+            cleaned_content = cleaned_content[:-3]
+        response_data = json.loads(cleaned_content.strip())
+    except json.JSONDecodeError:
+        # 如果不是JSON格式，创建一个查询响应
+        response_data = {
+            "action": "query_task",
+            "response": cleaned_content
+        }
+    
+    # 判断是否是查询任务
+    if response_data.get('action') in ['get_task', 'query_task'] or 'task_data' not in response_data:
+        try:
+            print("\n=== 阶段3.1：生成查询结果语音回复 ===")
+            tts_start_time = time.time()
+            response_text = response_data.get('response', cleaned_content)
+            # 如果响应文本太长，只取前500个字符
+            if len(response_text) > 500:
+                response_text = response_text[:497] + "..."
+            audio_data = silicon_api.text_to_speech(response_text)
+            print(f"语音合成耗时: {format_time_cost(tts_start_time)}")
+            
+            print(f"\n总耗时: {format_time_cost(total_start_time)}")
+            return jsonify({
+                'text': response_text,
+                'audio': f'data:audio/wav;base64,{base64.b64encode(audio_data).decode("utf-8")}',
+                'needs_confirmation': False,
+                'executed': True
+            })
+        except Exception as e:
+            print(f"处理查询任务时出错: {str(e)}")
+            return jsonify({
+                'text': response_text if 'response_text' in locals() else response_data.get('response', cleaned_content),
+                'needs_confirmation': False,
+                'executed': True
+            })
+    
+    # 如果不是查询任务，则需要确认
     if not session_id:
         session_id = str(datetime.now().timestamp())
     session_state[session_id] = response_data
     
     try:
-        print("\n=== 阶段3.1：生成语音回复 ===")
+        print("\n=== 阶段3.1：生成确认语音回复 ===")
         tts_start_time = time.time()
-        audio_data = silicon_api.text_to_speech(response_data['response'])
+        response_text = response_data['response']
+        # 如果响应文本太长，只取前500个字符
+        if len(response_text) > 500:
+            response_text = response_text[:497] + "..."
+        audio_data = silicon_api.text_to_speech(response_text)
         print(f"语音合成耗时: {format_time_cost(tts_start_time)}")
         
         print(f"\n总耗时: {format_time_cost(total_start_time)}")
         return jsonify({
-            'text': response_data['response'],
+            'text': response_text,
             'audio': f'data:audio/wav;base64,{base64.b64encode(audio_data).decode("utf-8")}',
             'needs_confirmation': True,
             'session_id': session_id
