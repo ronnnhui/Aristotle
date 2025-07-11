@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>亚里士多德</title>
+    <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='aristotle.jpg') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='aristotle.jpg') }}">
+    <link rel="apple-touch-icon" sizes="120x120" href="{{ url_for('static', filename='aristotle.jpg') }}">
+    <link rel="apple-touch-icon-precomposed" sizes="120x120" href="{{ url_for('static', filename='aristotle.jpg') }}">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        :root {
+            --max-width: 300px;
+            --background-color: #ffffff;
+            --border-radius: 16px;
+            --transition: all 0.3s ease;
+            --primary-color: #454545;
+            --light-gray: #f5f5f5;
+        }
+
+        body {
+            background-color: #ffffff;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        .title {
+            font-family: 'ZCOOL KuaiLe', cursive;
+        }
+        
+        .section {
+            width: 100%;
+            max-width: var(--max-width);
+            background-color: var(--background-color);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin: 10px auto;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.05);
+            transition: var(--transition);
+        }
+
+        .voice-button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 30px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0 auto;
+            box-shadow: 0 4px 6px rgba(92, 91, 91, 0.2);
+        }
+
+        .voice-button:hover {
+            background-color: #f5f5f5;
+            transform: scale(1.05);
+            color: var(--primary-color);
+        }
+
+        .voice-button:active {
+            transform: scale(0.95);
+        }
+
+        .voice-button.recording {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .voice-button .material-icons {
+            font-size: 1em;
+        }
+        
+        .recording-pulse {
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.7;
+            }
+        }
+        
+        .loading-dots {
+            animation: loading-dots 1.5s infinite;
+        }
+        
+        @keyframes loading-dots {
+            0%, 20% { opacity: 0; }
+            40% { opacity: 1; }
+            60%, 100% { opacity: 0; }
+        }
+
+        .mode-selector {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: var(--light-gray);
+            border-radius: var(--border-radius);
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div class="w-full max-w-md space-y-12">
+        <!-- 标题部分 -->
+        <header class="flex flex-col items-center space-y-4">
+            <div class="flex items-center justify-center space-x-4">
+                <img src="{{ url_for('static', filename='aristotle.jpg') }}" alt="亚里士多德" class="w-20 h-20 rounded-full object-cover">
+                <h1 class="text-4xl font-medium title" style="color: #454545">亚里士多德</h1>
+            </div>
+            <div class="bg-gray-50 px-6 py-2 rounded-full shadow-sm">
+                <p class="text-gray-500 text-sm">亚里士多德可以帮助你管理好每一件小事</p>
+            </div>
+        </header>
+
+        <!-- 主要内容部分 -->
+        <div class="section space-y-8">
+            <!-- 文字输入部分 -->
+            <div class="space-y-3">
+                <div class="flex space-x-2">
+                    <input 
+                        type="text" 
+                        id="textInput" 
+                        placeholder="输入您的指令..." 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent text-sm"
+                        style="background-color: var(--light-gray);"
+                    >
+                </div>
+            </div>
+
+            <!-- 语音输入部分 -->
+            <div class="flex justify-center">
+                <button id="recordButton" class="voice-button">
+                    <span class="material-icons" id="micIcon">mic</span>
+                    <span id="recordButtonText">开始对话</span>
+                </button>
+            </div>
+
+            <!-- 回复内容展示 -->
+            <div class="mode-selector">
+                <div id="loadingIndicator" class="hidden text-center py-6">
+                    <div class="inline-flex space-x-1">
+                        <div class="w-2 h-2 bg-gray-400 rounded-full loading-dots"></div>
+                        <div class="w-2 h-2 bg-gray-400 rounded-full loading-dots" style="animation-delay: 0.2s;"></div>
+                        <div class="w-2 h-2 bg-gray-400 rounded-full loading-dots" style="animation-delay: 0.4s;"></div>
+                    </div>
+                    <p class="text-gray-500 text-sm mt-3">处理中...</p>
+                </div>
+                
+                <div id="responseContent" class="min-h-16">
+                    <div class="text-center py-6">
+                        <span class="material-icons text-gray-400 text-2xl mb-3">chat</span>
+                        <p class="text-gray-500">等待您的指令...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+        let currentSessionId = null;
+        let waitingForConfirmation = false;
+        let mediaStream = null;
+        let audioContext = null;
+        let currentAudio = null;
+
+        // 初始化音频上下文
+        async function initializeAudioContext() {
+            if (!audioContext) {
+                try {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    console.log('音频上下文已初始化:', audioContext.state);
+                    
+                    // 添加状态变化监听
+                    audioContext.onstatechange = () => {
+                        console.log('音频上下文状态变化:', audioContext.state);
+                    };
+                    
+                    // 尝试恢复音频上下文
+                    if (audioContext.state === 'suspended') {
+                        await audioContext.resume();
+                        console.log('音频上下文已恢复');
+                    }
+                } catch (e) {
+                    console.error('音频上下文初始化失败:', e);
+                    if (e instanceof DOMException) {
+                        console.error('DOM异常:', e.name);
+                    }
+                }
+            }
+            return audioContext;
+        }
+
+        // 页面加载时初始化麦克风权限
+        async function initializeMicrophone() {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                console.log('麦克风权限已获取');
+            } catch (error) {
+                console.error('获取麦克风权限失败:', error);
+                if (error instanceof DOMException) {
+                    console.error('DOM异常:', error.name);
+                    if (error.name === 'NotAllowedError') {
+                        alert('请允许使用麦克风，否则无法使用语音功能');
+                    } else if (error.name === 'NotFoundError') {
+                        alert('未检测到麦克风设备');
+                    }
+                }
+            }
+        }
+
+        // 播放语音回复
+        async function playAudio(audioSrc) {
+            if (!audioSrc) {
+                console.log('没有音频数据');
+                return;
+            }
+
+            console.log('准备播放音频:', audioSrc.substring(0, 50) + '...');
+
+            try {
+                // 确保音频上下文已初始化
+                await initializeAudioContext();
+                if (!audioContext || audioContext.state === 'closed') {
+                    console.error('音频上下文未初始化或已关闭');
+                    return;
+                }
+
+                // 如果有正在播放的音频，先停止
+                if (currentAudio) {
+                    console.log('停止当前正在播放的音频');
+                    currentAudio.pause();
+                    currentAudio = null;
+                }
+
+                // 创建新的音频元素
+                console.log('创建新的音频元素');
+                const audio = new Audio();
+                
+                // 添加错误处理
+                audio.onerror = (e) => {
+                    console.error('音频加载错误:', e);
+                    if (audio.error) {
+                        console.error('错误代码:', audio.error.code);
+                        console.error('错误信息:', audio.error.message);
+                        switch (audio.error.code) {
+                            case MediaError.MEDIA_ERR_ABORTED:
+                                console.error('播放被中止');
+                                break;
+                            case MediaError.MEDIA_ERR_NETWORK:
+                                console.error('网络错误');
+                                break;
+                            case MediaError.MEDIA_ERR_DECODE:
+                                console.error('解码错误');
+                                break;
+                            case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                                console.error('不支持的音频格式');
+                                break;
+                        }
+                    }
+                };
+                
+                // 添加加载处理
+                audio.onloadstart = () => console.log('开始加载音频');
+                audio.onloadedmetadata = () => console.log('音频元数据已加载:', {
+                    duration: audio.duration,
+                    type: audio.type
+                });
+                audio.onloadeddata = () => console.log('音频数据已加载');
+                audio.oncanplay = () => console.log('音频可以开始播放');
+                audio.oncanplaythrough = () => console.log('音频可以流畅播放');
+                
+                // 设置音频属性
+                audio.volume = 1.0;
+                audio.preload = 'auto';
+                
+                // 设置音频源
+                audio.src = audioSrc;
+                currentAudio = audio;
+
+                // 开始播放
+                console.log('尝试播放音频...');
+                const playPromise = audio.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise
+                        .then(() => {
+                            console.log('音频开始播放');
+                            // 监听播放进度
+                            audio.ontimeupdate = () => {
+                                console.log('播放进度:', {
+                                    currentTime: audio.currentTime,
+                                    duration: audio.duration,
+                                    percentage: (audio.currentTime / audio.duration * 100).toFixed(2) + '%'
+                                });
+                            };
+                        })
+                        .catch(error => {
+                            console.error('播放失败:', error);
+                            if (error.name === 'NotAllowedError') {
+                                console.error('播放被浏览器阻止，可能需要用户交互');
+                                // 尝试恢复音频上下文
+                                audioContext.resume().then(() => {
+                                    console.log('音频上下文已恢复，重试播放');
+                                    return audio.play();
+                                }).catch(e => {
+                                    console.error('恢复音频上下文失败:', e);
+                                });
+                            }
+                            currentAudio = null;
+                        });
+                }
+                
+                // 监听播放完成
+                audio.onended = () => {
+                    console.log('音频播放完成');
+                    currentAudio = null;
+                };
+
+                // 监听播放暂停
+                audio.onpause = () => {
+                    console.log('音频播放暂停');
+                };
+
+                // 监听播放恢复
+                audio.onplay = () => {
+                    console.log('音频播放恢复');
+                };
+
+            } catch (error) {
+                console.error('音频处理失败:', error);
+                if (error instanceof DOMException) {
+                    console.error('DOM异常:', error.name);
+                }
+                currentAudio = null;
+            }
+        }
+
+        // 页面加载完成后初始化
+        window.addEventListener('load', async () => {
+            await initializeMicrophone();
+            // 初始化页面时同步数据
+            fetch('/api/sync', { method: 'POST' })
+                .catch(error => console.error('同步失败:', error));
+        });
+
+        // 用户交互时初始化音频上下文
+        async function handleUserInteraction() {
+            try {
+                const context = await initializeAudioContext();
+                if (context.state === 'suspended') {
+                    await context.resume();
+                }
+                // 成功后移除所有事件监听器
+                document.removeEventListener('click', handleUserInteraction);
+                document.removeEventListener('touchstart', handleUserInteraction);
+                document.removeEventListener('keydown', handleUserInteraction);
+            } catch (e) {
+                console.error('处理用户交互失败:', e);
+            }
+        }
+
+        // 添加多个事件监听器以捕获用户交互
+        document.addEventListener('click', handleUserInteraction);
+        document.addEventListener('touchstart', handleUserInteraction);
+        document.addEventListener('keydown', handleUserInteraction);
+
+        // 开始录音函数
+        async function startRecording() {
+            if (!mediaStream) {
+                await initializeMicrophone();
+                if (!mediaStream) return;
+            }
+
+            audioChunks = [];
+            const options = {
+                mimeType: 'audio/webm;codecs=opus',
+                audioBitsPerSecond: 128000
+            };
+            
+            try {
+                mediaRecorder = new MediaRecorder(mediaStream, options);
+            } catch (e) {
+                console.error('创建MediaRecorder失败:', e);
+                alert('您的浏览器不支持录音功能');
+                return;
+            }
+            
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+            };
+            
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                processAudioResponse(audioBlob);
+            };
+            
+            mediaRecorder.start();
+            isRecording = true;
+            
+            // 更新UI
+            const recordButton = document.getElementById('recordButton');
+            const recordButtonText = document.getElementById('recordButtonText');
+            const micIcon = document.getElementById('micIcon');
+            
+            recordButton.classList.add('recording', 'recording-pulse');
+            recordButtonText.textContent = '录音中...';
+            micIcon.textContent = 'mic_off';
+        }
+
+        // 停止录音函数
+        function stopRecording() {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+                
+                // 更新UI
+                const recordButton = document.getElementById('recordButton');
+                const recordButtonText = document.getElementById('recordButtonText');
+                const micIcon = document.getElementById('micIcon');
+                
+                recordButton.classList.remove('recording', 'recording-pulse');
+                recordButtonText.textContent = '开始对话';
+                micIcon.textContent = 'mic';
+            }
+        }
+
+        // 录音按钮点击事件
+        document.getElementById('recordButton').addEventListener('click', async () => {
+            // 在用户交互时初始化音频
+            await initializeAudioContext();
+            
+            if (!isRecording) {
+                startRecording();
+            } else {
+                stopRecording();
+            }
+        });
+
+        // 输入框回车键处理
+        document.getElementById('textInput').addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter') {
+                // 在用户交互时初始化音频
+                await initializeAudioContext();
+                
+                const text = e.target.value.trim();
+                if (text) {
+                    processTextInput(text);
+                    e.target.value = '';
+                }
+            }
+        });
+
+        // 处理文字输入
+        async function processTextInput(text) {
+            try {
+                // 显示加载指示器
+                document.getElementById('loadingIndicator').classList.remove('hidden');
+                document.getElementById('responseContent').innerHTML = '';
+                
+                // 处理指令
+                const commandResponse = await fetch('/api/process-command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        command: text,
+                        session_id: currentSessionId,
+                        is_confirmation: waitingForConfirmation
+                    })
+                });
+                
+                if (!commandResponse.ok) throw new Error('指令处理失败');
+                const responseData = await commandResponse.json();
+                
+                // 更新显示内容
+                const responseContent = document.getElementById('responseContent');
+                responseContent.innerHTML = `
+                    <div class="space-y-4">
+                        <div class="border-l-2 border-gray-200 pl-4 py-2">
+                            <p class="text-sm text-gray-500">您说</p>
+                            <p class="text-gray-900 mt-1">${text}</p>
+                        </div>
+                        <div class="border-l-2 border-gray-900 pl-4 py-2">
+                            <p class="text-sm text-gray-500">亚里士多德</p>
+                            <p class="text-gray-900 mt-1">${responseData.text}</p>
+                        </div>
+                    </div>
+                `;
+                
+                // 处理会话状态
+                if (responseData.needs_confirmation) {
+                    waitingForConfirmation = true;
+                    currentSessionId = responseData.session_id;
+                } else if (responseData.executed) {
+                    waitingForConfirmation = false;
+                    currentSessionId = null;
+                } else if (responseData.restart) {
+                    waitingForConfirmation = false;
+                    currentSessionId = null;
+                }
+                
+                // 播放语音回复
+                if (responseData.audio) {
+                    await playAudio(responseData.audio);
+                }
+                
+            } catch (error) {
+                console.error('处理失败:', error);
+                document.getElementById('responseContent').innerHTML = `
+                    <div class="text-center py-6">
+                        <span class="material-icons text-gray-400 text-4xl mb-3">error_outline</span>
+                        <p class="text-red-500">处理失败: ${error.message}</p>
+                    </div>
+                `;
+                // 重置会话状态
+                waitingForConfirmation = false;
+                currentSessionId = null;
+            } finally {
+                // 隐藏加载指示器
+                document.getElementById('loadingIndicator').classList.add('hidden');
+            }
+        }
+
+        async function processAudioResponse(audioBlob) {
+            const reader = new FileReader();
+            
+            reader.onloadend = async () => {
+                try {
+                    // 显示加载指示器
+                    document.getElementById('loadingIndicator').classList.remove('hidden');
+                    document.getElementById('responseContent').innerHTML = '';
+                    
+                    console.log('准备发送音频数据，大小:', audioBlob.size, '字节');
+                    console.log('音频类型:', audioBlob.type);
+                    
+                    // 发送语音数据进行转写
+                    const transcribeResponse = await fetch('/api/speech-to-text', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ audio: reader.result })
+                    });
+                    
+                    if (!transcribeResponse.ok) {
+                        const errorData = await transcribeResponse.json();
+                        throw new Error(errorData.error || '语音转写失败');
+                    }
+                    const transcribeData = await transcribeResponse.json();
+                    
+                    // 处理指令
+                    const commandResponse = await fetch('/api/process-command', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            command: transcribeData.text,
+                            session_id: currentSessionId,
+                            is_confirmation: waitingForConfirmation
+                        })
+                    });
+                    
+                    if (!commandResponse.ok) throw new Error('指令处理失败');
+                    const responseData = await commandResponse.json();
+                    
+                    // 更新显示内容
+                    const responseContent = document.getElementById('responseContent');
+                    responseContent.innerHTML = `
+                        <div class="space-y-4">
+                            <div class="border-l-2 border-gray-200 pl-4 py-2">
+                                <p class="text-sm text-gray-500">您说</p>
+                                <p class="text-gray-900 mt-1">${transcribeData.text}</p>
+                            </div>
+                            <div class="border-l-2 border-gray-900 pl-4 py-2">
+                                <p class="text-sm text-gray-500">亚里士多德</p>
+                                <p class="text-gray-900 mt-1">${responseData.text}</p>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // 处理会话状态
+                    if (responseData.needs_confirmation) {
+                        waitingForConfirmation = true;
+                        currentSessionId = responseData.session_id;
+                    } else if (responseData.executed) {
+                        waitingForConfirmation = false;
+                        currentSessionId = null;
+                    } else if (responseData.restart) {
+                        waitingForConfirmation = false;
+                        currentSessionId = null;
+                    }
+                    
+                    // 播放语音回复
+                    if (responseData.audio) {
+                        await playAudio(responseData.audio);
+                    }
+                    
+                } catch (error) {
+                    console.error('处理失败:', error);
+                    document.getElementById('responseContent').innerHTML = `
+                        <div class="text-center py-6">
+                            <span class="material-icons text-gray-400 text-4xl mb-3">error_outline</span>
+                            <p class="text-red-500">处理失败: ${error.message}</p>
+                        </div>
+                    `;
+                    // 重置会话状态
+                    waitingForConfirmation = false;
+                    currentSessionId = null;
+                } finally {
+                    // 隐藏加载指示器
+                    document.getElementById('loadingIndicator').classList.add('hidden');
+                }
+            };
+            
+            reader.readAsDataURL(audioBlob);
+        }
+    </script>
+</body>
+</html> 
