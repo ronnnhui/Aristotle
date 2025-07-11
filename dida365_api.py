@@ -398,28 +398,33 @@ class DidaAPI:
         self.conn.commit()
         print(f"\n同步完成！共同步了 {len(projects)} 个项目，{total_tasks} 个任务")
     
-    def get_local_tasks(self, project_id: Optional[str] = None) -> List[Dict]:
+    def get_local_tasks(self, project_id: Optional[str] = None, include_completed: bool = True) -> List[Dict]:
         """Get tasks from local database
         
         Args:
             project_id (str, optional): Project ID to filter tasks
+            include_completed (bool): Whether to include completed tasks (default: True)
             
         Returns:
             List[Dict]: List of tasks
         """
+        base_sql = '''
+            SELECT id, project_id, title, content, status
+            FROM tasks
+            WHERE 1=1
+        '''
+        
+        params = []
         if project_id:
-            self.cursor.execute('''
-            SELECT id, project_id, title, content, status
-            FROM tasks
-            WHERE project_id = ?
-            ORDER BY updated_at DESC
-            ''', (project_id,))
-        else:
-            self.cursor.execute('''
-            SELECT id, project_id, title, content, status
-            FROM tasks
-            ORDER BY updated_at DESC
-            ''')
+            base_sql += ' AND project_id = ?'
+            params.append(project_id)
+            
+        if not include_completed:
+            base_sql += ' AND (status = 0 OR status IS NULL)'
+            
+        base_sql += ' ORDER BY updated_at DESC'
+        
+        self.cursor.execute(base_sql, params)
         
         tasks = []
         for row in self.cursor.fetchall():

@@ -107,6 +107,82 @@
             background-color: var(--light-gray);
             border-radius: var(--border-radius);
         }
+
+        /* 设置按钮样式 */
+        .settings-button {
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .settings-button:hover {
+            transform: rotate(45deg);
+            opacity: 0.9;
+        }
+
+        /* 模态框样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .modal-content {
+            position: relative;
+            background-color: var(--background-color);
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: var(--border-radius);
+            max-width: 400px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .close-button {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            cursor: pointer;
+            color: var(--primary-color);
+        }
+
+        .settings-group {
+            margin: 20px 0;
+        }
+
+        .settings-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--primary-color);
+        }
+
+        .settings-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: var(--light-gray);
+        }
+
+        .save-button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: var(--transition);
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .save-button:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen p-4">
@@ -114,8 +190,13 @@
         <!-- 标题部分 -->
         <header class="flex flex-col items-center space-y-4">
             <div class="flex items-center justify-center space-x-4">
-                <img src="{{ url_for('static', filename='aristotle.jpg') }}" alt="亚里士多德" class="w-20 h-20 rounded-full object-cover">
-                <h1 class="text-4xl font-medium title" style="color: #454545">亚里士多德</h1>
+                <img src="{{ url_for('static', filename='aristotle.jpg') }}" alt="亚里士多德" class="w-16 h-16 rounded-full object-cover">
+                <div class="flex items-center">
+                    <h1 class="text-3xl font-medium title" style="color: #454545">亚里士多德</h1>
+                    <button class="settings-button ml-8 rounded-full w-8 h-8 flex items-center justify-center border-none" id="openSettings" style="background-color: var(--primary-color);">
+                        <span class="material-icons text-white" style="font-size: 18px;">settings</span>
+                    </button>
+                </div>
             </div>
             <div class="bg-gray-50 px-6 py-2 rounded-full shadow-sm">
                 <p class="text-gray-500 text-sm">亚里士多德可以帮助你管理好每一件小事</p>
@@ -163,6 +244,25 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- 设置模态框 -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button material-icons" id="closeSettings">close</span>
+            <h2 class="text-2xl font-medium mb-6">设置</h2>
+            <div class="settings-group">
+                <label for="llmModel">LLM 模型</label>
+                <select id="llmModel" name="llmModel">
+                    <option value="deepseek-ai/DeepSeek-R1-0528-Qwen3-8B">DeepSeek-R1 Qwen3 8B</option>
+                    <option value="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B">DeepSeek-R1 Qwen 32B</option>
+                    <option value="deepseek-ai/DeepSeek-R1-Distill-Qwen-14B">DeepSeek-R1 Qwen 14B</option>
+                    <option value="deepseek-ai/DeepSeek-R1-Distill-Qwen-7B">DeepSeek-R1 Qwen 7B</option>
+                    <option value="Pro/deepseek-ai/DeepSeek-R1-Distill-Qwen-7B">DeepSeek-R1 Qwen 7B (Pro)</option>
+                </select>
+            </div>
+            <button id="saveSettings" class="save-button">保存设置</button>
         </div>
     </div>
 
@@ -622,6 +722,64 @@
             };
             
             reader.readAsDataURL(audioBlob);
+        }
+
+        // 设置模态框相关代码
+        const modal = document.getElementById('settingsModal');
+        const openBtn = document.getElementById('openSettings');
+        const closeBtn = document.getElementById('closeSettings');
+        const saveBtn = document.getElementById('saveSettings');
+        const llmModelSelect = document.getElementById('llmModel');
+
+        // 打开模态框
+        openBtn.onclick = function() {
+            modal.style.display = "block";
+            // 获取当前设置
+            fetch('/api/settings')
+                .then(response => response.json())
+                .then(data => {
+                    llmModelSelect.value = data.llm_model;
+                })
+                .catch(error => console.error('获取设置失败:', error));
+        }
+
+        // 关闭模态框
+        closeBtn.onclick = function() {
+            modal.style.display = "none";
+        }
+
+        // 点击模态框外部关闭
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+
+        // 保存设置
+        saveBtn.onclick = function() {
+            const settings = {
+                llm_model: llmModelSelect.value
+            };
+            
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(settings)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    modal.style.display = "none";
+                } else {
+                    alert('保存设置失败');
+                }
+            })
+            .catch(error => {
+                console.error('保存设置失败:', error);
+                alert('保存设置失败');
+            });
         }
     </script>
 </body>

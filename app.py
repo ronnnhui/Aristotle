@@ -1,7 +1,8 @@
 from flask import Flask, render_template, request, jsonify, g
 from silicon_flow_api import SiliconFlowAPI
 from dida365_api import DidaAPI
-from prompts.task_prompts import TASK_ANALYSIS_PROMPT, CONFIRMATION_ANALYSIS_PROMPT
+from prompts.task_prompts import TASK_ANALYSIS_PROMPT
+from logging_config import setup_logging
 import os
 import tempfile
 import base64
@@ -9,6 +10,9 @@ from datetime import datetime
 import pytz
 import json
 import time
+
+# 设置日志记录器
+logger = setup_logging()
 
 # 用于格式化时间的辅助函数
 def format_time_cost(start_time):
@@ -35,6 +39,32 @@ silicon_api = SiliconFlowAPI()
 # 存储会话状态
 session_state = {}
 
+def save_config():
+    """保存配置到文件"""
+    with open('config.json', 'w', encoding='utf-8') as f:
+        json.dump(config, f, ensure_ascii=False, indent=4)
+
+@app.route('/api/settings', methods=['GET', 'POST'])
+def handle_settings():
+    """处理设置的获取和更新"""
+    if request.method == 'GET':
+        # 返回当前设置
+        return jsonify({
+            'llm_model': config.get('llm_model', 'gpt-4')
+        })
+    else:
+        # 更新设置
+        try:
+            data = request.get_json()
+            if 'llm_model' in data:
+                config['llm_model'] = data['llm_model']
+                save_config()
+                # 更新 SiliconFlowAPI 实例的设置
+                silicon_api.set_model(data['llm_model'])
+            return jsonify({'status': 'success'})
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
 def get_dida_api():
     """获取当前请求的DidaAPI实例"""
     if 'dida_api' not in g:
@@ -60,7 +90,7 @@ def speech_to_text():
     temp_path = None
     
     try:
-        print("\n=== 阶段1：语音输入 ===")
+        logger.info("=== 阶段1：语音输入 ===")
         
         # 验证请求格式
         if not request.is_json or request.json is None:
@@ -92,11 +122,9 @@ def speech_to_text():
             os.fsync(temp_file.fileno())
         
         # 调用ASR服务
-        print("\n=== 阶段1.1：调用ASR服务 ===")
-        asr_start_time = time.time()
+        logger.info("=== 阶段1.1：调用ASR服务 ===")
         result = silicon_api.transcribe_audio(temp_path)
-        print(f"语音识别耗时: {format_time_cost(asr_start_time)}")
-        print(f"ASR服务返回结果: {json.dumps(result, ensure_ascii=False, indent=2)}")
+        logger.debug(f"ASR服务返回结果: {json.dumps(result, ensure_ascii=False, indent=2)}")
         
         # 处理ASR结果
         if 'error' in result:
@@ -106,10 +134,11 @@ def speech_to_text():
         if not transcribed_text.strip():
             return jsonify({'error': '未能识别出有效的语音内容'}), 400
         
-        print(f"\n阶段1总耗时: {format_time_cost(total_start_time)}")
+        print("语音识别成功")
         return jsonify({'text': transcribed_text})
     
     except Exception as e:
+        print("语音识别失败")
         return jsonify({'error': str(e)}), 500
     
     finally:
@@ -122,30 +151,28 @@ def speech_to_text():
 
 def execute_task_action(action_data):
     """执行任务操作"""
-    start_time = time.time()
     try:
-        print(f"=== Executing Task Action ===")
-        print(f"Action data: {json.dumps(action_data, ensure_ascii=False, indent=2)}")
+        logger.info("=== Executing Task Action ===")
+        logger.debug(f"Action data: {json.dumps(action_data, ensure_ascii=False, indent=2)}")
         
         action = action_data.get('action')
         task_data = action_data.get('task_data', {})
         
         if not action:
             error_msg = "缺少操作类型"
-            print(f"错误: {error_msg}")
+            logger.error(f"错误: {error_msg}")
             return False, error_msg
         
-        print(f"操作类型: {action}")
-        print(f"任务数据: {json.dumps(task_data, ensure_ascii=False, indent=2)}")
+        logger.info(f"操作类型: {action}")
+        logger.debug(f"任务数据: {json.dumps(task_data, ensure_ascii=False, indent=2)}")
         
         try:
             dida_api = get_dida_api()
         except Exception as e:
             error_msg = f"无法连接到任务管理服务: {str(e)}"
-            print(f"错误: {error_msg}")
+            logger.error(f"错误: {error_msg}")
             return False, error_msg
         
-        action_start_time = time.time()
         if action == 'create_task':
             try:
                 if not task_data.get('title'):
@@ -157,14 +184,15 @@ def execute_task_action(action_data):
                 
                 result = dida_api.create_task(**task_data)
                 success_msg = f"已成功创建任务：{task_data.get('title')}"
-                print(f"成功: {success_msg}")
-                print(f"创建结果: {json.dumps(result, ensure_ascii=False, indent=2)}")
-                print(f"创建任务耗时: {format_time_cost(action_start_time)}")
+                logger.info(f"成功: {success_msg}")
+                logger.debug(f"创建结果: {json.dumps(result, ensure_ascii=False, indent=2)}")
+                print("任务创建成功")
                 return True, success_msg
                 
             except Exception as e:
                 error_msg = f"创建任务失败：{str(e)}"
-                print(f"错误: {error_msg}")
+                logger.error(f"错误: {error_msg}")
+                print("任务创建失败")
                 return False, error_msg
                 
         elif action == 'update_task':
@@ -185,287 +213,211 @@ def execute_task_action(action_data):
                 
                 result = dida_api.update_task(task_id, project_id, **task_data)
                 success_msg = f"已更新任务：{result.get('title', '未知任务')}"
-                print(f"成功: {success_msg}")
-                print(f"更新结果: {json.dumps(result, ensure_ascii=False, indent=2)}")
-                print(f"更新任务耗时: {format_time_cost(action_start_time)}")
+                logger.info(f"成功: {success_msg}")
+                logger.debug(f"更新结果: {json.dumps(result, ensure_ascii=False, indent=2)}")
+                print("任务更新成功")
                 return True, success_msg
                 
             except Exception as e:
                 error_msg = f"更新任务失败：{str(e)}"
-                print(f"错误: {error_msg}")
+                logger.error(f"错误: {error_msg}")
+                print("任务更新失败")
                 return False, error_msg
                 
         elif action == 'get_task':
             try:
                 # 检查必填字段
                 if not task_data.get('id'):
+                    # 如果没有任务ID，但有日期和项目ID，则返回该项目的任务列表
+                    if task_data.get('projectId'):
+                        tasks = dida_api.get_local_tasks(
+                            include_completed=False,
+                            project_id=task_data.get('projectId')
+                        )
+                        if not tasks:
+                            return False, "没有找到任何任务"
+                            
+                        # 如果指定了日期，过滤出该日期的任务
+                        if task_data.get('date'):
+                            target_date = task_data.get('date')
+                            filtered_tasks = []
+                            for task in tasks:
+                                start_date = task.get('startDate', '').split('T')[0]
+                                due_date = task.get('dueDate', '').split('T')[0]
+                                if start_date == target_date or due_date == target_date:
+                                    filtered_tasks.append(task)
+                            tasks = filtered_tasks
+                            
+                        if not tasks:
+                            return False, f"在指定日期没有找到任何任务"
+                            
+                        task_list = "\n".join([f"- {task.get('title')}" for task in tasks])
+                        success_msg = f"找到以下任务：\n{task_list}"
+                        logger.info(f"成功: {success_msg}")
+                        print("任务查询成功")
+                        return True, success_msg
+                        
                     return False, "缺少任务ID"
+                    
                 if not task_data.get('projectId'):
                     return False, "缺少项目ID"
                 
                 result = dida_api.get_task(task_data['projectId'], task_data['id'])
                 success_msg = f"已找到任务：{result.get('title', '未知任务')}"
-                print(f"成功: {success_msg}")
-                print(f"任务详情: {json.dumps(result, ensure_ascii=False, indent=2)}")
-                print(f"获取任务耗时: {format_time_cost(action_start_time)}")
+                logger.info(f"成功: {success_msg}")
+                logger.debug(f"任务详情: {json.dumps(result, ensure_ascii=False, indent=2)}")
+                print("任务查询成功")
                 return True, success_msg
                 
             except Exception as e:
                 error_msg = f"获取任务失败：{str(e)}"
-                print(f"错误: {error_msg}")
+                logger.error(f"错误: {error_msg}")
+                print("任务查询失败")
                 return False, error_msg
         else:
             error_msg = f"不支持的操作类型：{action}"
-            print(f"错误: {error_msg}")
+            logger.error(f"错误: {error_msg}")
+            print("不支持的操作类型")
             return False, error_msg
             
     except Exception as e:
         error_msg = f"执行操作时发生未知错误：{str(e)}"
-        print(f"错误: {error_msg}")
+        logger.error(f"错误: {error_msg}")
+        print("任务执行失败")
         return False, error_msg
-    finally:
-        print(f"任务操作总耗时: {format_time_cost(start_time)}")
-        print("=== Task Action Completed ===")
 
 @app.route('/api/process-command', methods=['POST'])
 def process_command():
     """处理用户指令"""
-    total_start_time = time.time()
-    
     try:
         # 验证请求格式
         if not request.is_json or request.json is None:
             return jsonify({'error': 'Content-Type must be application/json'}), 400
         
-        print("\n=== 阶段2：处理用户指令 ===")
+        logger.info("=== 阶段1：处理用户指令 ===")
         command = request.json.get('command')
-        session_id = request.json.get('session_id')
-        is_confirmation = request.json.get('is_confirmation', False)
+        logger.debug(f"收到指令: {command}")
         
         if not command:
             return jsonify({'error': 'No command provided'}), 400
         
-        # 处理确认请求
-        if is_confirmation:
-            return handle_confirmation(command, session_id, total_start_time)
+        # 获取任务和项目信息
+        dida_api = get_dida_api()
+        tasks = dida_api.get_local_tasks(include_completed=False)  # 只获取未完成的任务
+        projects = dida_api.get_projects()
         
-        # 处理初始指令
-        return handle_initial_command(command, session_id, total_start_time)
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-def handle_confirmation(command, session_id, total_start_time):
-    """处理用户确认"""
-    print("\n=== 阶段4：处理用户确认 ===")
-    confirm_start_time = time.time()
-    
-    if session_id not in session_state:
-        return jsonify({'error': 'Session expired'}), 400
-    
-    print("\n=== 阶段4.1：分析确认回复 ===")
-    llm_start_time = time.time()
-    confirm_response = silicon_api.chat_completion([
-        {"role": "user", "content": CONFIRMATION_ANALYSIS_PROMPT.format(command=command)}
-    ])
-    print(f"确认分析耗时: {format_time_cost(llm_start_time)}")
-    print(f"LLM返回结果: {json.dumps(confirm_response, ensure_ascii=False, indent=2)}")
-    
-    if not confirm_response or 'choices' not in confirm_response:
-        return jsonify({'error': 'AI服务暂时不可用，请稍后重试'}), 500
-    
-    response_content = confirm_response['choices'][0]['message']['content']
-    cleaned_content = response_content.strip()
-    if cleaned_content.startswith('```json'):
-        cleaned_content = cleaned_content[7:]
-    if cleaned_content.endswith('```'):
-        cleaned_content = cleaned_content[:-3]
-    confirm_result = json.loads(cleaned_content.strip())
-    
-    if confirm_result.get('confirmed'):
-        return handle_task_execution(session_id, total_start_time)
-    else:
-        return handle_retry_suggestion(confirm_result, session_id, total_start_time)
-
-def handle_task_execution(session_id, total_start_time):
-    """执行任务"""
-    print("\n=== 阶段5：执行任务 ===")
-    action_start_time = time.time()
-    success, result_message = execute_task_action(session_state[session_id])
-    print(f"任务执行耗时: {format_time_cost(action_start_time)}")
-    
-    session_state.pop(session_id, None)
-    
-    if not success:
-        try:
-            print("\n=== 阶段6：生成错误语音回复 ===")
-            error_response = f"抱歉，{result_message}"
-            tts_start_time = time.time()
-            audio_data = silicon_api.text_to_speech(error_response)
-            print(f"语音合成耗时: {format_time_cost(tts_start_time)}")
-            return jsonify({
-                'text': error_response,
-                'audio': f'data:audio/wav;base64,{base64.b64encode(audio_data).decode("utf-8")}',
-                'error': result_message
-            }), 500
-        except Exception:
-            return jsonify({
-                'text': error_response,
-                'error': result_message
-            }), 500
-    
-    try:
-        print("\n=== 阶段6：生成成功语音回复 ===")
-        tts_start_time = time.time()
-        response_text = f"好的，{result_message}"
-        audio_data = silicon_api.text_to_speech(response_text)
-        print(f"语音合成耗时: {format_time_cost(tts_start_time)}")
+        logger.debug(f"当前任务列表: {json.dumps(tasks, ensure_ascii=False, indent=2)}")
+        logger.debug(f"当前项目列表: {json.dumps(projects, ensure_ascii=False, indent=2)}")
         
-        print(f"\n总耗时: {format_time_cost(total_start_time)}")
-        return jsonify({
-            'text': response_text,
-            'audio': f'data:audio/wav;base64,{base64.b64encode(audio_data).decode("utf-8")}',
-            'executed': True
-        })
-    except Exception:
-        return jsonify({
-            'text': f"好的，{result_message}",
-            'executed': True
-        })
-
-def handle_retry_suggestion(confirm_result, session_id, total_start_time):
-    """处理重试建议"""
-    print("\n=== 阶段3：重新生成建议 ===")
-    try:
-        response_text = confirm_result.get('response', '好的，让我重新给出建议。')
-        tts_start_time = time.time()
-        audio_data = silicon_api.text_to_speech(response_text)
-        print(f"语音合成耗时: {format_time_cost(tts_start_time)}")
-        
-        print(f"\n总耗时: {format_time_cost(total_start_time)}")
-        return jsonify({
-            'text': response_text,
-            'audio': f'data:audio/wav;base64,{base64.b64encode(audio_data).decode("utf-8")}',
-            'needs_confirmation': True,
-            'session_id': session_id,
-            'retry_suggestion': True
-        })
-    except Exception:
-        return jsonify({
-            'text': response_text,
-            'needs_confirmation': True,
-            'session_id': session_id,
-            'retry_suggestion': True
-        })
-
-def handle_initial_command(command, session_id, total_start_time):
-    """处理初始指令"""
-    print("\n=== 阶段2：分析用户指令 ===")
-    dida_api = get_dida_api()
-    tasks = dida_api.get_local_tasks()
-    projects = dida_api.get_projects()
-    
-    current_time = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y年%m月%d日 %H:%M")
-    
-    print("\n=== 阶段3：生成建议 ===")
-    llm_start_time = time.time()
-    llm_response = silicon_api.chat_completion([
-        {"role": "user", "content": TASK_ANALYSIS_PROMPT.format(
-            current_time=current_time,
-            command=command,
-            tasks=tasks,
-            projects=projects
-        )}
-    ])
-    print(f"指令分析耗时: {format_time_cost(llm_start_time)}")
-    print(f"LLM返回结果: {json.dumps(llm_response, ensure_ascii=False, indent=2)}")
-    
-    if not llm_response or 'choices' not in llm_response:
-        return jsonify({'error': 'AI服务暂时不可用，请稍后重试'}), 500
-    
-    response_content = llm_response['choices'][0]['message']['content']
-    cleaned_content = response_content.strip()
-    
-    try:
-        # 尝试解析JSON响应
-        if cleaned_content.startswith('```json'):
-            cleaned_content = cleaned_content[7:]
-        if cleaned_content.endswith('```'):
-            cleaned_content = cleaned_content[:-3]
-        response_data = json.loads(cleaned_content.strip())
-    except json.JSONDecodeError:
-        # 如果不是JSON格式，创建一个查询响应
-        response_data = {
-            "action": "query_task",
-            "response": cleaned_content
+        # 获取当前时间，包含星期信息
+        current_datetime = datetime.now(pytz.timezone('Asia/Shanghai'))
+        weekday_map = {
+            0: '一',
+            1: '二',
+            2: '三',
+            3: '四',
+            4: '五',
+            5: '六',
+            6: '日'
         }
-    
-    # 判断是否是查询任务
-    if response_data.get('action') in ['get_task', 'query_task'] or 'task_data' not in response_data:
+        current_time = current_datetime.strftime(f"%Y年%m月%d日 星期{weekday_map[current_datetime.weekday()]} %H:%M")
+        
+        logger.info("=== 阶段2：分析指令 ===")
+        llm_response = silicon_api.chat_completion([
+            {"role": "user", "content": TASK_ANALYSIS_PROMPT.format(
+                current_time=current_time,
+                command=command,
+                tasks=tasks,
+                projects=projects
+            )}
+        ])
+        logger.debug(f"LLM返回结果: {json.dumps(llm_response, ensure_ascii=False, indent=2)}")
+        
+        if not llm_response or 'choices' not in llm_response:
+            print("指令分析失败")
+            return jsonify({'error': 'AI服务暂时不可用，请稍后重试'}), 500
+        
+        print("指令分析成功")
+        response_content = llm_response['choices'][0]['message']['content']
+        cleaned_content = response_content.strip()
+        
         try:
-            print("\n=== 阶段3.1：生成查询结果语音回复 ===")
-            tts_start_time = time.time()
-            response_text = response_data.get('response', cleaned_content)
-            # 如果响应文本太长，只取前500个字符
-            if len(response_text) > 500:
-                response_text = response_text[:497] + "..."
-            audio_data = silicon_api.text_to_speech(response_text)
-            print(f"语音合成耗时: {format_time_cost(tts_start_time)}")
+            # 尝试解析JSON响应
+            if cleaned_content.startswith('```json'):
+                cleaned_content = cleaned_content[7:]
+            if cleaned_content.endswith('```'):
+                cleaned_content = cleaned_content[:-3]
+            response_data = json.loads(cleaned_content.strip())
+        except json.JSONDecodeError:
+            # 如果不是JSON格式，创建一个普通响应
+            response_data = {
+                "response": cleaned_content
+            }
+        
+        # 如果需要执行任务操作
+        if 'action' in response_data and 'task_data' in response_data:
+            logger.info("=== 阶段3：执行任务操作 ===")
+            success, result_message = execute_task_action(response_data)
             
-            print(f"\n总耗时: {format_time_cost(total_start_time)}")
-            return jsonify({
-                'text': response_text,
-                'audio': f'data:audio/wav;base64,{base64.b64encode(audio_data).decode("utf-8")}',
-                'needs_confirmation': False,
-                'executed': True
-            })
-        except Exception as e:
-            print(f"处理查询任务时出错: {str(e)}")
-            return jsonify({
-                'text': response_text if 'response_text' in locals() else response_data.get('response', cleaned_content),
-                'needs_confirmation': False,
-                'executed': True
-            })
-    
-    # 如果不是查询任务，则需要确认
-    if not session_id:
-        session_id = str(datetime.now().timestamp())
-    session_state[session_id] = response_data
-    
-    try:
-        print("\n=== 阶段3.1：生成确认语音回复 ===")
-        tts_start_time = time.time()
-        response_text = response_data['response']
+            if not success:
+                try:
+                    logger.info("=== 阶段4：生成错误语音回复 ===")
+                    error_response = f"抱歉，{result_message}"
+                    audio_data = silicon_api.text_to_speech(error_response)
+                    print("语音合成成功")
+                    return jsonify({
+                        'text': error_response,
+                        'audio': f'data:audio/wav;base64,{base64.b64encode(audio_data).decode("utf-8")}',
+                        'error': result_message
+                    }), 500
+                except Exception:
+                    print("语音合成失败")
+                    return jsonify({
+                        'text': error_response,
+                        'error': result_message
+                    }), 500
+            
+            # 使用LLM返回的友好回复
+            response_text = response_data.get('response', f"好的，{result_message}")
+        else:
+            # 如果只是普通回复，只使用response字段中的内容
+            response_text = response_data.get('response', cleaned_content)
+        
         # 如果响应文本太长，只取前500个字符
         if len(response_text) > 500:
             response_text = response_text[:497] + "..."
-        audio_data = silicon_api.text_to_speech(response_text)
-        print(f"语音合成耗时: {format_time_cost(tts_start_time)}")
         
-        print(f"\n总耗时: {format_time_cost(total_start_time)}")
-        return jsonify({
-            'text': response_text,
-            'audio': f'data:audio/wav;base64,{base64.b64encode(audio_data).decode("utf-8")}',
-            'needs_confirmation': True,
-            'session_id': session_id
-        })
-    except Exception:
-        return jsonify({
-            'text': response_data['response'],
-            'needs_confirmation': True,
-            'session_id': session_id
-        })
+        try:
+            logger.info("=== 阶段4：生成语音回复 ===")
+            audio_data = silicon_api.text_to_speech(response_text)
+            print("语音合成成功")
+            
+            return jsonify({
+                'text': response_text,
+                'audio': f'data:audio/wav;base64,{base64.b64encode(audio_data).decode("utf-8")}',
+                'executed': True
+            })
+        except Exception:
+            print("语音合成失败")
+            return jsonify({
+                'text': response_text,
+                'executed': True
+            })
+            
+    except Exception as e:
+        print("指令处理失败")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/sync', methods=['POST'])
 def sync_tasks():
     """同步任务数据"""
-    print("\n=== 阶段1：同步数据 ===")
-    start_time = time.time()
+    logger.info("=== 同步数据 ===")
     try:
         get_dida_api().sync_with_server()
-        print(f"同步耗时: {format_time_cost(start_time)}")
+        print("数据同步成功")
         return jsonify({'status': 'success'})
     except Exception as e:
+        print("数据同步失败")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
@@ -481,15 +433,15 @@ if __name__ == '__main__':
     )
     
     # 程序启动时同步数据库
-    print("\n=== 初始化：同步数据 ===")
-    start_time = time.time()
+    logger.info("=== 初始化：同步数据 ===")
     try:
         with app.app_context():
             dida_api = get_dida_api()
             dida_api.sync_with_server()
-            print(f"初始同步耗时: {format_time_cost(start_time)}")
+            print("初始数据同步成功")
     except Exception as e:
-        print(f"初始同步失败: {str(e)}")
+        print("初始数据同步失败")
+        logger.error(f"初始同步失败: {str(e)}")
     
     # 启动服务器
     app.run(

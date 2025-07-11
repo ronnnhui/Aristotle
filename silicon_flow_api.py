@@ -11,6 +11,7 @@ class SiliconFlowAPI:
         Args:
             config_path (str): 配置文件路径，默认为'config.json'
         """
+        self.config_path = config_path
         # 读取配置文件
         with open(config_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
@@ -23,6 +24,24 @@ class SiliconFlowAPI:
         self.headers = {
             "Authorization": f"Bearer {self.api_token}"
         }
+    
+    def set_model(self, model_name: str) -> None:
+        """设置LLM模型
+        
+        Args:
+            model_name (str): 模型名称
+        """
+        # 更新内存中的模型设置
+        self.models['llm'] = model_name
+        
+        # 更新配置文件
+        with open(self.config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        
+        config['silicon_flow']['models']['llm'] = model_name
+        
+        with open(self.config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=4)
     
     def transcribe_audio(self, audio_file_path: str) -> dict:
         """ASR模块：将音频文件转换为文字
